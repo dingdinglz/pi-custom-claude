@@ -1,0 +1,29 @@
+{
+  "name": "pi-custom-claude",
+  "version": "0.1.0",
+  "description": "Configure an Anthropic API key and custom Base URL through Pi's /login flow.",
+  "type": "module",
+  "keywords": ["pi-package", "pi-extension", "anthropic", "claude"],
+  "files": ["index.ts", "src"],
+  "pi": {
+    "extensions": ["./index.ts"]
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "1.1.0",
+    "@earendil-works/pi-coding-agent": "1.1.0",
+    "@types/node": "^22.19.0",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}
