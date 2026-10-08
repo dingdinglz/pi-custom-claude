@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { hasApi } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { BASE_URL_ENV, createCustomAnthropicProvider } from "../src/provider.ts";
+import { COMPAT_ENV } from "../src/proxy-compat.ts";
 
 test("real Pi runtime routes requests immediately, after re-login and after restart", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "pi-custom-claude-runtime-"));
@@ -75,6 +76,7 @@ test("real Pi runtime routes requests immediately, after re-login and after rest
     }, {
       maxTokens: 32,
       reasoning: "medium",
+      env: { [COMPAT_ENV]: "on" },
       signal: AbortSignal.timeout(5000),
       onPayload() { payloadObserved = true; },
     });

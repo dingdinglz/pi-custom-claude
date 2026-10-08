@@ -12,6 +12,7 @@ import {
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 import { DEFAULT_BASE_URL } from "../src/base-url.ts";
 import { BASE_URL_ENV, createCustomAnthropicProvider } from "../src/provider.ts";
+import { COMPAT_ENV } from "../src/proxy-compat.ts";
 
 function scriptedInteraction(answers: string[]) {
   const prompts: AuthPrompt[] = [];
@@ -180,4 +181,74 @@ test("abort after receiving the URL does not save partial credentials", async ()
     notify() {},
   }), { name: "AbortError" });
   assert.equal(await credentials.read("anthropic"), undefined);
+});
+
+for (const value of ["", " \t "]) {
+  test(`empty ambient Base URL ${JSON.stringify(value)} leaves the model endpoint untouched`, async () => {
+    const result = await resolve({ type: "api_key", key: "test-key" }, { [BASE_URL_ENV]: value });
+    assert.deepEqual(result?.auth, { apiKey: "test-key" });
+  });
+
+  test(`empty stored Base URL ${JSON.stringify(value)} falls back to ambient configuration`, async () => {
+    const result = await resolve({ type: "api_key", key: "test-key", env: { [BASE_URL_ENV]: value } }, {
+      [BASE_URL_ENV]: "https://ambient.example.com/v1",
+    });
+    assert.equal(result?.auth.baseUrl, "https://ambient.example.com");
+  });
+}
+
+test("legacy key-only credentials inherit a nonempty ambient Base URL", async () => {
+  const result = await resolve({ type: "api_key", key: "existing-key" }, {
+    [BASE_URL_ENV]: "https://ambient.example.com",
+  });
+  assert.deepEqual(result?.auth, { apiKey: "existing-key", baseUrl: "https://ambient.example.com" });
+});
+
+test("blank login persists an explicit official URL that wins over ambient configuration", async () => {
+  const flow = scriptedInteraction(["test-key", ""]);
+  const credential = await createCustomAnthropicProvider().auth.apiKey!.login!(flow.interaction);
+  const result = await resolve(credential, { [BASE_URL_ENV]: "https://ambient.example.com" });
+  assert.equal(result?.auth.baseUrl, DEFAULT_BASE_URL);
+});
+
+test("forwards ambient compatibility setting for environment-only authentication", async () => {
+  const result = await resolve(undefined, { ANTHROPIC_API_KEY: "test-key", [COMPAT_ENV]: "off" });
+  assert.equal(result?.env?.[COMPAT_ENV], "off");
+});
+
+test("stored compatibility setting wins over ambient setting and preserves other provider config", async () => {
+  const env = { [BASE_URL_ENV]: "https://saved.example.com", [COMPAT_ENV]: "off", EXTRA: "value" };
+  const result = await resolve({ type: "api_key", key: "test-key", env }, { [COMPAT_ENV]: "on" });
+  assert.deepEqual(result?.env, env);
+});
+
+test("empty scoped compatibility setting falls back to ambient setting", async () => {
+  const result = await resolve({ type: "api_key", key: "test-key", env: { [COMPAT_ENV]: "  " } }, {
+    [COMPAT_ENV]: "off",
+  });
+  assert.equal(result?.env?.[COMPAT_ENV], "off");
+});
+
+for (const [url, shouldWarn] of [
+  ["http://gateway.example.com", true],
+  ["http://192.168.1.2:8080", true],
+  ["https://gateway.example.com", false],
+  ["http://localhost:8080", false],
+  ["http://127.0.0.1:8080", false],
+  ["http://[::1]:8080", false],
+] as const) {
+  test(`login HTTP warning for ${url}`, async () => {
+    const flow = scriptedInteraction(["test-secret-key", url]);
+    await createCustomAnthropicProvider().auth.apiKey!.login!(flow.interaction);
+    const warnings = flow.events.filter((event) => event.type === "info" && event.message.includes("明文"));
+    assert.equal(warnings.length, shouldWarn ? 1 : 0);
+    assert.ok(!JSON.stringify(flow.events).includes("test-secret-key"));
+  });
+}
+
+test("pasting the token-count endpoint explains the mistake and retries", async () => {
+  const flow = scriptedInteraction(["test-key", "https://gateway.example.com/v1/messages/count_tokens", "https://gateway.example.com"]);
+  const credential = await createCustomAnthropicProvider().auth.apiKey!.login!(flow.interaction);
+  assert.equal(credential.env?.[BASE_URL_ENV], "https://gateway.example.com");
+  assert.ok(flow.events.some((event) => event.type === "info" && event.message.includes("计数接口")));
 });

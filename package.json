@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Configure an Anthropic API key and custom Base URL through Pi's /login flow.",
   "type": "module",
+  "license": "MIT",
   "keywords": ["pi-package", "pi-extension", "anthropic", "claude"],
   "files": ["index.ts", "src"],
   "pi": {
